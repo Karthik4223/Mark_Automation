@@ -99,7 +99,7 @@ def assign_marks(df):
     def assign_t2_t3_marks(grade, flip=False, is_absent=False):
         grade = get_valid_grade(grade)
         if is_absent:
-            return None, None
+            return np.nan, np.nan  # Use NaN for absent students to skip calculations
         min_sum, max_sum = t2_t3_ranges[grade]
         part1, part2 = min_sum // 2, max_sum - min_sum // 2
         return (part2, part1) if flip else (part1, part2)
@@ -123,11 +123,12 @@ def assign_marks(df):
         df.at[i, 'T2_Part1'], df.at[i, 'T2_Part2'] = assign_t2_t3_marks(grade, flip, is_absent)
         df.at[i, 'T3_Part1'], df.at[i, 'T3_Part2'] = assign_t2_t3_marks(grade, not flip, is_absent)
         df.at[i, 'T5a'], df.at[i, 'T5b'], df.at[i, 'T5c'], df.at[i, 'T5d'] = assign_t5_marks(grade)
-        df.iloc[i] = adjust_marks_based_on_attendance(df.iloc[i], attendance_adj)
+        if not is_absent:  # Only adjust for students who are not marked as absent
+            df.iloc[i] = adjust_marks_based_on_attendance(df.iloc[i], attendance_adj)
         flip = not flip
 
     df['Overall T5'] = df[['T5a', 'T5b', 'T5c', 'T5d']].sum(axis=1) * 20 / (highest_mark * 4)
-    df['Total'] = df['T1'] + df[['T2_Part1', 'T2_Part2', 'T3_Part1', 'T3_Part2']].sum(axis=1) + df['Overall T5']
+    df['Total'] = df['T1'] + df[['T2_Part1', 'T2_Part2', 'T3_Part1', 'T3_Part2']].sum(axis=1, skipna=True) + df['Overall T5']
     return df
 
 # Main function to generate the report
@@ -152,11 +153,16 @@ def generate_report(uploaded_file):
             st.subheader("Detailed Report Summary")
             summary_data = {
                 'T1': [df['T1'].max(), df['T1'].min(), df['T1'].mean()],
-                'T2': [df[['T2_Part1', 'T2_Part2']].sum(axis=1).max(), df[['T2_Part1', 'T2_Part2']].sum(axis=1).min(), df[['T2_Part1', 'T2_Part2']].sum(axis=1).mean()],
-                'T3': [df[['T3_Part1', 'T3_Part2']].sum(axis=1).max(), df[['T3_Part1', 'T3_Part2']].sum(axis=1                ).min(), df[['T3_Part1', 'T3_Part2']].sum(axis=1).mean()],
+                'T2': [df[['T2_Part1', 'T2_Part2']].sum(axis=1, skipna=True).max(), 
+                    df[['T2_Part1', 'T2_Part2']].sum(axis=1, skipna=True).min(), 
+                    df[['T2_Part1', 'T2_Part2']].sum(axis=1, skipna=True).mean()],
+                'T3': [df[['T3_Part1', 'T3_Part2']].sum(axis=1, skipna=True).max(), 
+                    df[['T3_Part1', 'T3_Part2']].sum(axis=1, skipna=True).min(), 
+                    df[['T3_Part1', 'T3_Part2']].sum(axis=1, skipna=True).mean()],
                 'Overall T5': [df['Overall T5'].max(), df['Overall T5'].min(), df['Overall T5'].mean()],
                 'Total': [df['Total'].max(), df['Total'].min(), df['Total'].mean()]
             }
+
 
             summary_df = pd.DataFrame(summary_data, index=['Highest', 'Lowest', 'Average'])
             st.dataframe(summary_df)
@@ -165,7 +171,7 @@ def generate_report(uploaded_file):
             st.subheader("Summary of Differences Between Averages")
 
             avg_t1 = df['T1'].mean()
-            avg_t2_t3 = df[['T2_Part1', 'T2_Part2', 'T3_Part1', 'T3_Part2']].sum(axis=1).mean()
+            avg_t2_t3 = df[['T2_Part1', 'T2_Part2', 'T3_Part1', 'T3_Part2']].sum(axis=1, skipna=True).mean()
             avg_t5_scaled = df['Overall T5'].mean()  # T5 is already scaled to 20 points
 
             diff_t1_t2_t3 = abs(avg_t1 - avg_t2_t3)
@@ -208,9 +214,9 @@ def generate_report(uploaded_file):
 
             # Define a function to plot bell curves
             def plot_bell_curve(data, ax, title):
-                mean = np.mean(data)
-                std_dev = np.std(data)
-                x = np.linspace(min(data), max(data), 100)
+                mean = np.nanmean(data)
+                std_dev = np.nanstd(data)
+                x = np.linspace(np.nanmin(data), np.nanmax(data), 100)
                 y = norm.pdf(x, mean, std_dev)
                 ax.plot(x, y, color='blue')
                 ax.set_title(title)
@@ -222,7 +228,7 @@ def generate_report(uploaded_file):
             plot_bell_curve(df['T1'], axes[0, 0], "Distribution of T1 Marks")
 
             # Plot T2 + T3 combined marks distribution as a bell curve
-            plot_bell_curve(df[['T2_Part1', 'T2_Part2', 'T3_Part1', 'T3_Part2']].sum(axis=1), axes[0, 1], "Distribution of T2 + T3 Marks")
+            plot_bell_curve(df[['T2_Part1', 'T2_Part2', 'T3_Part1', 'T3_Part2']].sum(axis=1, skipna=True), axes[0, 1], "Distribution of T2 + T3 Marks")
 
             # Plot Overall T5 distribution as a bell curve
             plot_bell_curve(df['Overall T5'], axes[1, 0], "Distribution of Overall T5 Marks")
@@ -249,24 +255,14 @@ def generate_report(uploaded_file):
 
                 # Re-calculate and display the summary
                 st.subheader("Detailed Report Summary")
-                summary_data = {
-                    'T1': [df['T1'].max(), df['T1'].min(), df['T1'].mean()],
-                    'T2': [df[['T2_Part1', 'T2_Part2']].sum(axis=1).max(), df[['T2_Part1', 'T2_Part2']].sum(axis=1).min(), df[['T2_Part1', 'T2_Part2']].sum(axis=1).mean()],
-                    'T3': [df[['T3_Part1', 'T3_Part2']].sum(axis=1).max(), df[['T3_Part1', 'T3_Part2']].sum(axis=1).min(), df[['T3_Part1', 'T3_Part2']].sum(axis=1).mean()],
-                    'Overall T5': [df['Overall T5'].max(), df['Overall T5'].min(), df['Overall T5'].mean()],
-                    'Total': [df['Total'].max(), df['Total'].min(), df['Total'].mean()]
-                }
-                
-                summary_df = pd.DataFrame(summary_data, index=['Highest', 'Lowest', 'Average'])
                 st.dataframe(summary_df)
-                
+
                 # Recalculate and display differences between averages
                 st.subheader("Summary of Differences Between Averages")
 
                 avg_t1 = df['T1'].mean()
-                avg_t2_t3 = df[['T2_Part1', 'T2_Part2', 'T3_Part1', 'T3_Part2']].sum(axis=1).mean()
-                avg_t5_scaled = df['Overall T5'].mean()  # T5 is already scaled to 20 points
-                avg_total = df['Total'].mean()
+                avg_t2_t3 = df[['T2_Part1', 'T2_Part2', 'T3_Part1', 'T3_Part2']].sum(axis=1, skipna=True).mean()
+                avg_t5_scaled = df['Overall T5'].mean()
 
                 diff_t1_t2_t3 = abs(avg_t1 - avg_t2_t3)
                 diff_t5_t1_t2_t3 = abs(avg_t5_scaled - (avg_t1 + avg_t2_t3))
@@ -288,4 +284,3 @@ def generate_report(uploaded_file):
 
 # Execute the function to generate the report
 generate_report(uploaded_file)
-
