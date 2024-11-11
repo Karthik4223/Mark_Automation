@@ -92,68 +92,42 @@ def assign_marks(df):
         'E': (average_mark * 2, highest_mark * 2)
     }
 
-    # Ensure the grade is valid; if invalid, default to 'E'
+    # Function to ensure valid grade and default to 'E' if invalid
     def get_valid_grade(grade):
-        if grade not in t2_t3_ranges:
-            return 'E'  # Default to 'E' if the grade is not valid
-        return grade
+        return grade if grade in t2_t3_ranges else 'E'
 
     def assign_t2_t3_marks(grade, flip=False, is_absent=False):
-        grade = get_valid_grade(grade)  # Ensure valid grade
-        
+        grade = get_valid_grade(grade)
         if is_absent:
-            return None, None  # Return None for absent students
-
+            return None, None
         min_sum, max_sum = t2_t3_ranges[grade]
         part1, part2 = min_sum // 2, max_sum - min_sum // 2
-        if flip:
-            part1, part2 = part2, part1
-        return part1, part2
+        return (part2, part1) if flip else (part1, part2)
 
     def assign_t5_marks(grade):
-        grade = get_valid_grade(grade)  # Ensure valid grade
-        min_total, max_total = grade_to_t5_total_range[grade]
-        
-        # T5 mark ranges are adjusted for different grades
+        min_total, max_total = grade_to_t5_total_range[get_valid_grade(grade)]
         total_marks = random.randint(int(min_total), int(max_total))
-        
-        # Distribute the marks among the 4 parts while ensuring no overlap
-        parts = []
-        remaining = total_marks
-        
-        # Ensure each part gets at least 10 marks, adjusting the remaining sum
+        parts, remaining = [], total_marks
         for i in range(4):
-            max_part = min(highest_mark, remaining - (10 * (3 - i)))  # Ensure the remaining can accommodate the parts
+            max_part = min(highest_mark, remaining - (10 * (3 - i)))
             part = random.randint(10, max_part) if max_part >= 10 else 10
             parts.append(part)
             remaining -= part
-        
         return parts
 
     df['T1'] = df['Grade'].map(grade_to_t1_marks)
     flip = False
     for i in range(len(df)):
-        grade = df.at[i, 'Grade']
-        attendance = df.at[i, 'Attendance']
-        adjustment_range = get_adjustment_range(attendance)
-        attendance_adj = attendance_adjustment[adjustment_range]
-        
-        # Check if the student is marked as absent
-        is_absent = df.at[i, 'ABS'] == -1
-
-        # Assign marks for T2 and T3 with alternating patterns
+        grade, attendance, is_absent = df.at[i, 'Grade'], df.at[i, 'Attendance'], df.at[i, 'ABS'] == -1
+        attendance_adj = attendance_adjustment[get_adjustment_range(attendance)]
         df.at[i, 'T2_Part1'], df.at[i, 'T2_Part2'] = assign_t2_t3_marks(grade, flip, is_absent)
         df.at[i, 'T3_Part1'], df.at[i, 'T3_Part2'] = assign_t2_t3_marks(grade, not flip, is_absent)
-        flip = not flip
-
-        # Assign marks for T5
         df.at[i, 'T5a'], df.at[i, 'T5b'], df.at[i, 'T5c'], df.at[i, 'T5d'] = assign_t5_marks(grade)
         df.iloc[i] = adjust_marks_based_on_attendance(df.iloc[i], attendance_adj)
-    
-    # Scale T5 to 20-point system
+        flip = not flip
+
     df['Overall T5'] = df[['T5a', 'T5b', 'T5c', 'T5d']].sum(axis=1) * 20 / (highest_mark * 4)
     df['Total'] = df['T1'] + df[['T2_Part1', 'T2_Part2', 'T3_Part1', 'T3_Part2']].sum(axis=1) + df['Overall T5']
-    
     return df
 
 # Main function to generate the report
@@ -168,8 +142,6 @@ def generate_report(uploaded_file):
         # Check for necessary columns
         if "RegNo" in df.columns and "Grade" in df.columns and "Attendance" in df.columns and "ABS" in df.columns:
             st.write("File uploaded successfully!")
-            
-            # Run mark assignment and generate report
             df = assign_marks(df)
             
             # Display assigned marks per student and summary report
@@ -181,7 +153,7 @@ def generate_report(uploaded_file):
             summary_data = {
                 'T1': [df['T1'].max(), df['T1'].min(), df['T1'].mean()],
                 'T2': [df[['T2_Part1', 'T2_Part2']].sum(axis=1).max(), df[['T2_Part1', 'T2_Part2']].sum(axis=1).min(), df[['T2_Part1', 'T2_Part2']].sum(axis=1).mean()],
-                'T3': [df[['T3_Part1', 'T3_Part2']].sum(axis=1).max(), df[['T3_Part1', 'T3_Part2']].sum(axis=1).min(), df[['T3_Part1', 'T3_Part2']].sum(axis=1).mean()],
+                'T3': [df[['T3_Part1', 'T3_Part2']].sum(axis=1).max(), df[['T3_Part1', 'T3_Part2']].sum(axis=1                ).min(), df[['T3_Part1', 'T3_Part2']].sum(axis=1).mean()],
                 'Overall T5': [df['Overall T5'].max(), df['Overall T5'].min(), df['Overall T5'].mean()],
                 'Total': [df['Total'].max(), df['Total'].min(), df['Total'].mean()]
             }
@@ -195,7 +167,6 @@ def generate_report(uploaded_file):
             avg_t1 = df['T1'].mean()
             avg_t2_t3 = df[['T2_Part1', 'T2_Part2', 'T3_Part1', 'T3_Part2']].sum(axis=1).mean()
             avg_t5_scaled = df['Overall T5'].mean()  # T5 is already scaled to 20 points
-            avg_total = df['Total'].mean()
 
             diff_t1_t2_t3 = abs(avg_t1 - avg_t2_t3)
             diff_t5_t1_t2_t3 = abs(avg_t5_scaled - (avg_t1 + avg_t2_t3))
@@ -317,3 +288,4 @@ def generate_report(uploaded_file):
 
 # Execute the function to generate the report
 generate_report(uploaded_file)
+
