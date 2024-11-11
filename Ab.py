@@ -13,7 +13,7 @@ highest_mark = st.number_input("Enter the highest possible mark for any single p
 average_mark = st.number_input("Enter the average mark across the four parts of T5:", min_value=10, max_value=20, value=16)
 
 # File upload section
-uploaded_file = st.file_uploader("Upload CSV or Excel file with columns 'RegNo', 'Grade', and 'Attendance'", type=["csv", "xlsx"])
+uploaded_file = st.file_uploader("Upload CSV or Excel file with columns 'RegNo', 'Grade', 'Attendance', and 'ABS'", type=["csv", "xlsx"])
 
 # Grade-to-marks mapping with higher marks for higher grades
 grade_to_t1_marks = {'S': 7, 'A': 6, 'B': 5, 'C': 4, 'D': 3, 'E': 2}
@@ -157,23 +157,25 @@ def assign_marks(df):
     return df
 
 # Main function to generate the report
-def generate_report():
-    # Ensure file is uploaded
+def generate_report(uploaded_file):
     if uploaded_file is not None:
+        # Load the uploaded file
         if uploaded_file.name.endswith(".csv"):
             df = pd.read_csv(uploaded_file)
         else:
             df = pd.read_excel(uploaded_file)
+            
+        # Check for necessary columns
         if "RegNo" in df.columns and "Grade" in df.columns and "Attendance" in df.columns and "ABS" in df.columns:
             st.write("File uploaded successfully!")
             
-            # Initial mark assignment
+            # Run mark assignment and generate report
             df = assign_marks(df)
             
-            # Display assigned marks per student
+            # Display assigned marks per student and summary report
             st.subheader("Assigned Marks for Each Student")
             st.dataframe(df)
-            
+
             # Summary of Highest, Lowest, and Average Marks
             st.subheader("Detailed Report Summary")
             summary_data = {
@@ -308,11 +310,10 @@ def generate_report():
                 # Re-plot the bell curves for all targets and total
                 st.subheader("Marks Distribution (Bell Curves) for Each Target and Total")
                 st.pyplot(fig)
-
         else:
             st.error("The uploaded file must contain 'RegNo', 'Grade', 'Attendance', and 'ABS' columns.")
     else:
         st.error("Please upload a file with the necessary columns.")
 
 # Execute the function to generate the report
-generate_report()
+generate_report(uploaded_file)
